@@ -1,6 +1,8 @@
 package br.edu.cefsa.analisadorJquery;
 
 import javax.sound.sampled.Line;
+import javax.swing.*;
+import javax.swing.table.TableModel;
 import java.io.*;
 import java.net.*;
 import java.util.*;
@@ -21,11 +23,20 @@ public class Main {
             FileWriter fileWriter = new FileWriter("jquery-compressed-3.6.0.js");
             PrintWriter printWriter = new PrintWriter(fileWriter);
 
-
             compressedJquery = compressao(fileReader);
-
             printWriter.print(compressedJquery);
             printWriter.close();
+
+            List<Token> tokenList = lexArchive(compressedJquery);
+
+            List<List<String>> tabelaLex = new ArrayList<>();
+
+            for(Token token : tokenList)
+            {
+                tabelaLex.get(0).add(token.positionStart.toString());
+                tabelaLex.get(1).add(token.value);
+                tabelaLex.get(2).add(token.type);
+            }
 
         }
         catch(Exception error)
@@ -122,6 +133,8 @@ public class Main {
                                     possibleWordEnds.put("%","Variable");
                                     possibleWordEnds.put(":","Variable");
 
+        List<String> operators = Arrays.asList("!","=","+","-","*","/","%","&","|");
+
         Pattern patt = Pattern.compile("[^a-z0-9]", Pattern.CASE_INSENSITIVE);
         Pattern numPatt = Pattern.compile("[0-9]", Pattern.CASE_INSENSITIVE);
 
@@ -130,51 +143,67 @@ public class Main {
 
         while(index < compressedJquery.length())
         {
-            if(patt.matcher(String.valueOf(jQueryArray[index])).find()) //Se atende ao RegEx
+            char thisChar = jQueryArray[index];
+
+            if(operators.contains(thisChar))
+            {
+                tokenList.add(new Token(word, "Operator", wordStart, index-1));
+            }
+
+            if(patt.matcher(String.valueOf(thisChar)).find()) //Se atende ao RegEx
             {
                 if(word.isBlank())
                 {
                     wordStart = index;
                 }
-                word += jQueryArray[index];
+                word += thisChar; //Preenche string Word
             }
             else
             {
-                if(jsTokens.contains(word))
+                if(jsTokens.contains(word))//Palavra reservada
                 {
                     tokenList.add(new Token(word, "KeyWord", wordStart, index-1));
+                    word = "";
                 }
-                else if(possibleWordEnds.containsKey(String.valueOf(jQueryArray[index])))
+                else if(possibleWordEnds.containsKey(String.valueOf(thisChar)))
                 {
                     if(!word.isBlank())
                     {
                         if(numPatt.matcher(word).find())
                         {
-                            if(!(jQueryArray[index] == '.'))
+                            if(thisChar == '.')
+                            {
+                                word += thisChar;
+                            }
+                            else //Integer
                             {
                                 tokenList.add(new Token(word, "Integer", wordStart, index-1));
+                                word = "";
+                            }
+                        }
+                        else if(word.contains(".") && numPatt.matcher(word.replace(".","")).find())
+                        {
+                            if(numPatt.matcher(word.replace(".","")).find()) //Se removendo . sobram numeros
+                            {
+                                tokenList.add(new Token(word, "Float", wordStart, index-1));
+                                word = "";
                             }
                             else
                             {
-                                word += jQueryArray[index];
+                                tokenList.add(new Token(word, "Object", wordStart, index-1));
+                                word = "";
                             }
-                        }
-                        else if(word.contains("."))
-                        {
-                            tokenList.add(new Token(word, "Float", wordStart, index-1));
                         }
                         else
                         {
-                            tokenList.add(new Token(word, possibleWordEnds.get(String.valueOf(jQueryArray[index])), wordStart, index-1));
+                            tokenList.add(new Token(word, possibleWordEnds.get(String.valueOf(thisChar)), wordStart, index-1));
                         }
                     }
                 }
-                word = "";
             }
 
         }
+
+        return tokenList;
     }
-
-
-
 }
