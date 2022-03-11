@@ -116,9 +116,9 @@ public class Main {
         Map<String, String> possibleWordEnds = Map.of(" ", "Variable",
                                                      ".", "ObjectName",
                                                      ";", "Value",
-                                                     "(", "Method",
+                                                     "(", "Function",
                                                      ")", "Parameter",
-                                                     "{", "ObjectName",
+                                                     "{", "Object",
                                                      "}", "Undefined",
                                                      "[", "Vector",
                                                      "]", "Variable",
@@ -140,6 +140,8 @@ public class Main {
 
         char[] jQueryArray = compressedJquery.toCharArray();
         String word = "";
+        boolean openedQuotation = false; // identifica que palavra está entre aspas
+        boolean isToken = false;
 
         while(index < compressedJquery.length())
         {
@@ -160,48 +162,50 @@ public class Main {
             }
             else
             {
-                if(jsTokens.contains(word))//Palavra reservada
+                if (jsTokens.contains(word) && !openedQuotation)//Palavra reservada
                 {
-                    tokenList.add(new Token(word, "KeyWord", wordStart, index-1));
-                    word = "";
-                }
-                else if(possibleWordEnds.containsKey(String.valueOf(thisChar)))
-                {
-                    if(!word.isBlank())
-                    {
-                        if(numPatt.matcher(word).find())
-                        {
-                            if(thisChar == '.')
-                            {
+                    tokenList.add(new Token(word, "KeyWord", wordStart, index - 1));
+                    isToken = true;
+                } else if (possibleWordEnds.containsKey(String.valueOf(thisChar))) {
+                    if (!word.isBlank()) {
+                        if (numPatt.matcher(word).find() && !openedQuotation) {
+                            if (thisChar == '.') {
                                 word += thisChar;
-                            }
-                            else //Integer
+                            } else //Integer
                             {
-                                tokenList.add(new Token(word, "Integer", wordStart, index-1));
-                                word = "";
+                                tokenList.add(new Token(word, "Integer", wordStart, index - 1));
+                                isToken = true;
                             }
-                        }
-                        else if(word.contains(".") && numPatt.matcher(word.replace(".","")).find())
-                        {
-                            if(numPatt.matcher(word.replace(".","")).find()) //Se removendo . sobram numeros
+                        } else if (word.contains(".") && numPatt.matcher(word.replace(".", "")).find() && !openedQuotation) {
+                            if (numPatt.matcher(word.replace(".", "")).find()) //Se removendo . sobram numeros
                             {
-                                tokenList.add(new Token(word, "Float", wordStart, index-1));
-                                word = "";
+                                tokenList.add(new Token(word, "Float", wordStart, index - 1));
+                                isToken = true;
+                            } else {
+                                tokenList.add(new Token(word, "Object", wordStart, index - 1));
+                                isToken = true;
                             }
-                            else
-                            {
-                                tokenList.add(new Token(word, "Object", wordStart, index-1));
-                                word = "";
+                        } else {
+
+                            if (thisChar == '"' || thisChar == '\'') {
+                                openedQuotation = false;
                             }
+
+                            tokenList.add(new Token(word, possibleWordEnds.get(String.valueOf(thisChar)), wordStart, index - 1));
+                            isToken = true;
                         }
-                        else
-                        {
-                            tokenList.add(new Token(word, possibleWordEnds.get(String.valueOf(thisChar)), wordStart, index-1));
-                        }
+                    }
+                    else if (thisChar == '"' || thisChar == '\'') {
+                        openedQuotation = true;
                     }
                 }
             }
 
+            index++;
+            if(isToken) {
+                word = "";
+                isToken = false;
+            }
         }
 
         return tokenList;
