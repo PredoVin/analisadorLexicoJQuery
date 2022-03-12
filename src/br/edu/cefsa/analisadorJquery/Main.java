@@ -1,12 +1,8 @@
 package br.edu.cefsa.analisadorJquery;
 
-import javax.sound.sampled.Line;
-import javax.swing.*;
-import javax.swing.table.TableModel;
 import java.io.*;
 import java.net.*;
 import java.util.*;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class Main {
@@ -23,26 +19,32 @@ public class Main {
             FileWriter fileWriter = new FileWriter("jquery-compressed-3.6.0.js");
             PrintWriter printWriter = new PrintWriter(fileWriter);
 
+            FileWriter fileWriterLex = new FileWriter("tabelaLex.Lex");
+            PrintWriter printWriterLex = new PrintWriter(fileWriterLex);
+
             compressedJquery = compressao(fileReader);
             printWriter.print(compressedJquery);
             printWriter.close();
 
             List<Token> tokenList = lexArchive(compressedJquery);
 
-            List<List<String>> tabelaLex = new ArrayList<>();
-
+            printWriterLex.println("Posição,Valor,Tipo");
+            System.out.println("Posição,Valor,Tipo");
             for(Token token : tokenList)
             {
-                tabelaLex.get(0).add(token.positionStart.toString());
-                tabelaLex.get(1).add(token.value);
-                tabelaLex.get(2).add(token.type);
+                printWriterLex.println(token.positionStart + "," + token.value + "," + token.type);
+                System.out.println(token.positionStart + "," + token.value + "," + token.type);
             }
 
+            printWriterLex.close();
+
+            System.out.println("End of Program");
         }
         catch(Exception error)
         {
             System.out.println("error => " + error.toString());
-            System.out.println("error message => " + error.getMessage());
+            System.out.println("line => " + error.getStackTrace()[0].getLineNumber());
+            System.out.println("error message => " + error.getStackTrace()[0].toString());
             System.out.println("error cause => " + error.getCause());
         }
     }
@@ -109,31 +111,32 @@ public class Main {
                 "implements", "interface", "let", "package", "private", "private", "protected", "public",
                 "static", "await", "abstract", "boolean", "byte", "char", "double", "final", "float",
                 "goto", "int", "long", "native", "short", "synchronized", "throws", "transient", "volatile",
-                "null", "true", "false");
+                "null", "true", "false", "undefined");
 
-        int index = 0;
-        int wordStart = 0;
-        Map<String, String> possibleWordEnds = Map.of(" ", "Variable",
-                                                     ".", "ObjectName",
-                                                     ";", "Value",
-                                                     "(", "Function",
-                                                     ")", "Parameter",
-                                                     "{", "Object",
-                                                     "}", "Undefined",
-                                                     "[", "Vector",
-                                                     "]", "Variable",
-                                                    "=", "Variable");
-                                    possibleWordEnds.put("\"","String");
-                                    possibleWordEnds.put("'","Char");
-                                    possibleWordEnds.put("!","Variable");
-                                    possibleWordEnds.put("+","Variable");
-                                    possibleWordEnds.put("-","Variable");
-                                    possibleWordEnds.put("*","Variable");
-                                    possibleWordEnds.put("/","Variable");
-                                    possibleWordEnds.put("%","Variable");
-                                    possibleWordEnds.put(":","Variable");
+        Map<String, String> possibleWordEnds = new HashMap<String, String>();
+        possibleWordEnds.put(" ", "Variable");
+        possibleWordEnds.put(".", "ObjectName");
+        possibleWordEnds.put(";", "Variable");
+        possibleWordEnds.put("(", "Function");
+        possibleWordEnds.put(")", "Parameter");
+        possibleWordEnds.put("{", "Object");
+        possibleWordEnds.put("}", "Variable");
+        possibleWordEnds.put("[", "Vector");
+        possibleWordEnds.put("]", "Variable");
+        possibleWordEnds.put("=", "Variable");
+        possibleWordEnds.put("\"","String");
+        possibleWordEnds.put("'", "Char");
+        possibleWordEnds.put("!", "Variable");
+        possibleWordEnds.put("+", "Variable");
+        possibleWordEnds.put("-", "Variable");
+        possibleWordEnds.put("*", "Variable");
+        possibleWordEnds.put("/", "Variable");
+        possibleWordEnds.put("%", "Variable");
+        possibleWordEnds.put(":", "Variable");
+        possibleWordEnds.put("<", "Variable");
+        possibleWordEnds.put(">", "Variable");
 
-        List<String> operators = Arrays.asList("!","=","+","-","*","/","%","&","|");
+        List<String> operators = Arrays.asList("!","=","+","-","*","/","%","&","|","<",">");
 
         Pattern patt = Pattern.compile("[^a-z0-9]", Pattern.CASE_INSENSITIVE);
         Pattern numPatt = Pattern.compile("[0-9]", Pattern.CASE_INSENSITIVE);
@@ -142,17 +145,19 @@ public class Main {
         String word = "";
         boolean openedQuotation = false; // identifica que palavra está entre aspas
         boolean isToken = false;
+        int index = 0;
+        int wordStart = 0;
 
-        while(index < compressedJquery.length())
+        while(index < jQueryArray.length)
         {
             char thisChar = jQueryArray[index];
 
-            if(operators.contains(thisChar))
+            if(operators.contains(String.valueOf(thisChar)) && !openedQuotation)
             {
-                tokenList.add(new Token(word, "Operator", wordStart, index-1));
+                tokenList.add(new Token(String.valueOf(thisChar), "Operator", index));
             }
 
-            if(patt.matcher(String.valueOf(thisChar)).find()) //Se atende ao RegEx
+            if(!patt.matcher(String.valueOf(thisChar)).find()) //Se não é caractere especial
             {
                 if(word.isBlank())
                 {
@@ -164,48 +169,54 @@ public class Main {
             {
                 if (jsTokens.contains(word) && !openedQuotation)//Palavra reservada
                 {
-                    tokenList.add(new Token(word, "KeyWord", wordStart, index - 1));
-                    isToken = true;
-                } else if (possibleWordEnds.containsKey(String.valueOf(thisChar))) {
-                    if (!word.isBlank()) {
-                        if (numPatt.matcher(word).find() && !openedQuotation) {
-                            if (thisChar == '.') {
+                    tokenList.add(new Token(word, "KeyWord", wordStart));
+                    word = "";
+                }
+                else if(possibleWordEnds.containsKey(String.valueOf(thisChar)))
+                {
+                    if(!word.isBlank())
+                    {
+                        if(numPatt.matcher(word).find() && !openedQuotation)//Se apenas números
+                        {
+                            if(thisChar == '.')
+                            {
                                 word += thisChar;
                             } else //Integer
                             {
-                                tokenList.add(new Token(word, "Integer", wordStart, index - 1));
-                                isToken = true;
+                                tokenList.add(new Token(word, "Integer", wordStart));
+                                word = "";
                             }
-                        } else if (word.contains(".") && numPatt.matcher(word.replace(".", "")).find() && !openedQuotation) {
-                            if (numPatt.matcher(word.replace(".", "")).find()) //Se removendo . sobram numeros
+                        }
+                        else if(word.contains(".")  && !openedQuotation)
+                        {
+                            if(numPatt.matcher(word.replace(".","")).find()) //Se removendo . sobram numeros
                             {
-                                tokenList.add(new Token(word, "Float", wordStart, index - 1));
-                                isToken = true;
-                            } else {
-                                tokenList.add(new Token(word, "Object", wordStart, index - 1));
-                                isToken = true;
+                                tokenList.add(new Token(word, "Float", wordStart));
+                                word = "";
                             }
-                        } else {
-
-                            if (thisChar == '"' || thisChar == '\'') {
+                            else
+                            {
+                                tokenList.add(new Token(word, "Object", wordStart));
+                                word = "";
+                            }
+                        }
+                        else
+                        {
+                            if (thisChar == '"' || thisChar == '\'')
+                            {
                                 openedQuotation = false;
                             }
-
-                            tokenList.add(new Token(word, possibleWordEnds.get(String.valueOf(thisChar)), wordStart, index - 1));
-                            isToken = true;
+                            tokenList.add(new Token(word, possibleWordEnds.get(String.valueOf(thisChar)), wordStart));
+                            word = "";
                         }
                     }
-                    else if (thisChar == '"' || thisChar == '\'') {
+                    else if (thisChar == '"' || thisChar == '\'')
+                    {
                         openedQuotation = true;
                     }
                 }
             }
-
             index++;
-            if(isToken) {
-                word = "";
-                isToken = false;
-            }
         }
 
         return tokenList;
